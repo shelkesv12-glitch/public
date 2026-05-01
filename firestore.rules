@@ -11,10 +11,11 @@ service cloud.firestore {
     function isEmailVerified() { return request.auth.token.email_verified == true; }
     function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
     
-    // Admin check looks for email in environment or a role in the user document
+    // Admin check looks for email in environment or a whitelist in the 'admins' collection
     function isAdmin() { 
       return isSignedIn() && (
         request.auth.token.email == 'shelkesv12@gmail.com' || 
+        exists(/databases/$(database)/documents/admins/$(request.auth.token.email)) ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
       );
@@ -23,6 +24,11 @@ service cloud.firestore {
     function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
     function incoming() { return request.resource.data; }
     function existing() { return resource.data; }
+
+    match /admins/{email} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
 
     // User Profile Rules
     match /users/{userId} {
@@ -43,7 +49,7 @@ service cloud.firestore {
       );
       
       allow update: if (isOwner(userId) || isAdmin()) && isValidUser(incoming()) && (
-        (isOwner(userId) && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL'])) ||
+        (isOwner(userId) && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'points'])) ||
         isAdmin()
       );
     }
@@ -52,12 +58,12 @@ service cloud.firestore {
     match /issues/{issueId} {
       function isValidIssue(data) {
         return data.keys().hasAll(['title', 'description', 'category', 'severity', 'status', 'imageUrl', 'reporterId', 'createdAt', 'updatedAt']) &&
-               data.title is string && data.title.size() <= 500 &&
-               data.description is string && data.description.size() <= 5000 &&
+               data.title is string && data.title.size() <= 1000 &&
+               data.description is string && data.description.size() <= 10000 &&
                data.category in ['pothole', 'garbage', 'water_leakage', 'drainage', 'other'] &&
                data.severity in ['low', 'medium', 'high', 'critical'] &&
                data.status in ['pending', 'in_progress', 'resolved', 'rejected'] &&
-               data.imageUrl is string && data.imageUrl.size() <= 1000000 &&
+               data.imageUrl is string && data.imageUrl.size() <= 10000000 &&
                data.reporterId == request.auth.uid &&
                data.createdAt == request.time &&
                data.updatedAt == request.time &&
@@ -75,7 +81,7 @@ service cloud.firestore {
       allow list: if isSignedIn();
       allow get: if isSignedIn();
       
-      allow create: if isSignedIn() && isEmailVerified() && isValidIssue(incoming()) && isValidId(issueId);
+      allow create: if isSignedIn() && isValidIssue(incoming()) && isValidId(issueId);
       
       allow update: if isSignedIn() && isValidUpdate(incoming()) && (
         // Admins can update almost anything (within reason) to bypass terminal locks or fix data

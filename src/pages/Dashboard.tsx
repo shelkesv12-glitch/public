@@ -6,6 +6,8 @@ import {
   onSnapshot,
   doc,
   updateDoc,
+  setDoc,
+  deleteDoc,
   serverTimestamp
 } from "firebase/firestore";
 import { db, Issue, UserProfile, handleFirestoreError, OperationType } from "../lib/firebase";
@@ -15,7 +17,8 @@ import {
 } from "recharts";
 import { 
   TrendingUp, Users, AlertCircle, CheckCircle2, 
-  Filter, MoreVertical, Search, ExternalLink, Calendar, MapPin
+  Filter, MoreVertical, Search, ExternalLink, Calendar, MapPin,
+  UserPlus, Trash2, X, ShieldCheck
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -29,6 +32,20 @@ export default function Dashboard({ profile }: { profile: UserProfile | null }) 
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
   const [adminNoteInput, setAdminNoteInput] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
+  const [authorizedAdmins, setAuthorizedAdmins] = useState<string[]>([]);
+  const [newAdminEmail, setNewAdminEmail] = useState("");
+  const [showAdminManagement, setShowAdminManagement] = useState(false);
+
+  useEffect(() => {
+    const adminsRef = collection(db, 'admins');
+    const unsubscribe = onSnapshot(adminsRef, (snapshot) => {
+      const adminList = snapshot.docs.map(doc => doc.id);
+      setAuthorizedAdmins(adminList);
+    }, (error) => {
+      console.warn("Could not fetch admins (expected for non-super-admins):", error.message);
+    });
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     const issuesRef = collection(db, 'issues');
@@ -84,6 +101,34 @@ export default function Dashboard({ profile }: { profile: UserProfile | null }) 
       });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `issues/${issueId}`);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleAddAdmin = async () => {
+    if (!newAdminEmail || !newAdminEmail.includes('@')) return;
+    setIsUpdating(true);
+    try {
+      await setDoc(doc(db, 'admins', newAdminEmail.toLowerCase().trim()), {
+        addedAt: serverTimestamp(),
+        addedBy: profile?.email || 'system'
+      });
+      setNewAdminEmail("");
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `admins/${newAdminEmail}`);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleRemoveAdmin = async (email: string) => {
+    if (!window.confirm(`Are you sure you want to remove ${email} from authorized persons?`)) return;
+    setIsUpdating(true);
+    try {
+      await deleteDoc(doc(db, 'admins', email));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `admins/${email}`);
     } finally {
       setIsUpdating(false);
     }
@@ -227,6 +272,87 @@ export default function Dashboard({ profile }: { profile: UserProfile | null }) 
           </div>
         )}
       </AnimatePresence>
+      
+      {/* Admin Management Modal */}
+      <AnimatePresence>
+        {showAdminManagement && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowAdminManagement(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="relative bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col"
+            >
+              <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center">
+                    <ShieldCheck className="w-6 h-6 text-indigo-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-slate-900">Authorized Persons</h2>
+                    <p className="text-xs text-slate-500 font-medium">Manage who can access this dashboard</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setShowAdminManagement(false)}
+                  className="p-2 hover:bg-slate-100 rounded-full transition-colors"
+                >
+                  <X className="w-6 h-6 text-slate-400" />
+                </button>
+              </div>
+
+              <div className="p-8 space-y-6">
+                <div className="space-y-4">
+                  <label className="text-xs font-bold uppercase tracking-widest text-slate-400 block">Add New Admin</label>
+                  <div className="flex gap-2">
+                    <input 
+                      type="email"
+                      value={newAdminEmail}
+                      onChange={(e) => setNewAdminEmail(e.target.value)}
+                      placeholder="email@example.com"
+                      className="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-all"
+                    />
+                    <button
+                      onClick={handleAddAdmin}
+                      disabled={isUpdating || !newAdminEmail.includes('@')}
+                      className="bg-indigo-600 text-white p-3 rounded-2xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 disabled:opacity-50 shrink-0"
+                    >
+                      <UserPlus className="w-6 h-6" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <label className="text-xs font-bold uppercase tracking-widest text-slate-400 block">Current Administrators</label>
+                  <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                    {authorizedAdmins.map(email => (
+                      <div key={email} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 group">
+                        <span className="text-sm font-semibold text-slate-700">{email}</span>
+                        <button 
+                          onClick={() => handleRemoveAdmin(email)}
+                          className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                    {authorizedAdmins.length === 0 && (
+                      <p className="text-center py-8 text-slate-400 text-sm italic">Only default admin configured in rules.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -234,6 +360,15 @@ export default function Dashboard({ profile }: { profile: UserProfile | null }) 
           <p className="text-slate-500">Managing civic issues and field workforce</p>
         </div>
         <div className="flex items-center gap-3">
+          {(profile?.email === 'shelkesv12@gmail.com' || profile?.role === 'admin') && (
+            <button 
+              onClick={() => setShowAdminManagement(true)}
+              className="bg-white border border-slate-200 rounded-2xl px-4 py-2 flex items-center gap-2 shadow-sm hover:border-indigo-300 transition-colors text-slate-600 font-bold"
+            >
+              <Users className="w-5 h-5 text-indigo-600" />
+              <span className="text-sm">Manage Access</span>
+            </button>
+          )}
           <div className="bg-white border border-slate-200 rounded-2xl px-4 py-2 flex items-center gap-2 shadow-sm">
              <Calendar className="w-5 h-5 text-slate-400" />
              <span className="text-sm font-medium text-slate-600">Apr 30, 2026</span>

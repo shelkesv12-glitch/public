@@ -113,12 +113,22 @@ export default function ReportIssueModal({ isOpen, onClose, user, profile }: Pro
     if (!aiResult || !user) return;
     setSubmitting(true);
 
+    // Sanitize category and severity to match allowed values in rules
+    const allowedCategories = ['pothole', 'garbage', 'water_leakage', 'drainage', 'other'];
+    const allowedSeverities = ['low', 'medium', 'high', 'critical'];
+    
+    const category = aiResult.category?.toLowerCase() || 'other';
+    const finalCategory = allowedCategories.includes(category) ? category : 'other';
+    
+    const severity = aiResult.severity?.toLowerCase() || 'medium';
+    const finalSeverity = allowedSeverities.includes(severity) ? severity : 'medium';
+
     try {
       const issueData = {
         title: aiResult.title || "Reported Issue",
         description: aiResult.description || "",
-        category: aiResult.category || "other",
-        severity: aiResult.severity || "medium",
+        category: finalCategory,
+        severity: finalSeverity,
         status: "pending" as const,
         imageUrl: image,
         latitude: location?.lat || 0,
@@ -131,13 +141,18 @@ export default function ReportIssueModal({ isOpen, onClose, user, profile }: Pro
 
       await addDoc(collection(db, 'issues'), issueData);
       
-      // Award points
-      await updateDoc(doc(db, 'users', user.uid), {
-        points: increment(10)
-      });
+      // Award points (wrap in try-catch so it doesn't block submission success)
+      try {
+        await updateDoc(doc(db, 'users', user.uid), {
+          points: increment(10)
+        });
+      } catch (e) {
+        console.warn("Could not award points:", e);
+      }
 
       handleClose();
     } catch (error) {
+      console.error("Submission error details:", error);
       handleFirestoreError(error, OperationType.WRITE, 'issues');
     } finally {
       setSubmitting(false);
