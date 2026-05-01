@@ -60,7 +60,9 @@ service cloud.firestore {
                data.imageUrl is string && data.imageUrl.size() <= 1000000 &&
                data.reporterId == request.auth.uid &&
                data.createdAt == request.time &&
-               data.updatedAt == request.time;
+               data.updatedAt == request.time &&
+               (data.latitude is number || !data.keys().hasAny(['latitude'])) &&
+               (data.longitude is number || !data.keys().hasAny(['longitude']));
       }
 
       function isValidUpdate(data) {
