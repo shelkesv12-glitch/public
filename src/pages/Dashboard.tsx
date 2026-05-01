@@ -371,7 +371,9 @@ export default function Dashboard({ profile }: { profile: UserProfile | null }) 
           )}
           <div className="bg-white border border-slate-200 rounded-2xl px-4 py-2 flex items-center gap-2 shadow-sm">
              <Calendar className="w-5 h-5 text-slate-400" />
-             <span className="text-sm font-medium text-slate-600">Apr 30, 2026</span>
+             <span className="text-sm font-medium text-slate-600">
+               {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+             </span>
           </div>
         </div>
       </header>
