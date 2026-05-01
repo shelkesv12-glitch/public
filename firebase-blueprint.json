@@ -1,0 +1,114 @@
+{
+  "entities": {
+    "Issue": {
+      "title": "City Issue",
+      "description": "A reported civic issue such as a pothole or garbage dump",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "Short title or summary of the issue"
+        },
+        "description": {
+          "type": "string",
+          "description": "AI-summarized description of the issue"
+        },
+        "category": {
+          "type": "string",
+          "enum": ["pothole", "garbage", "water_leakage", "drainage", "other"],
+          "description": "Category detection by AI"
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["low", "medium", "high", "critical"],
+          "description": "Urgency level detection by AI"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "in_progress", "resolved", "rejected"],
+          "description": "Current status of the resolution"
+        },
+        "imageUrl": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL of the captured photo"
+        },
+        "latitude": {
+          "type": "number",
+          "description": "GPS Latitude"
+        },
+        "longitude": {
+          "type": "number",
+          "description": "GPS Longitude"
+        },
+        "address": {
+          "type": "string",
+          "description": "Reverse geocoded address"
+        },
+        "reporterId": {
+          "type": "string",
+          "description": "UID of the citizen reporter"
+        },
+        "reporterName": {
+          "type": "string",
+          "description": "Display name of the citizen"
+        },
+        "assignedTo": {
+          "type": "string",
+          "description": "UID of the assigned field staff or department"
+        },
+        "adminNotes": {
+          "type": "string",
+          "description": "Notes from the authority"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["title", "category", "severity", "status", "imageUrl", "reporterId", "createdAt", "updatedAt"]
+    },
+    "User": {
+      "title": "User Profile",
+      "description": "Profile data for citizens and officials",
+      "type": "object",
+      "properties": {
+        "role": {
+          "type": "string",
+          "enum": ["citizen", "admin", "staff"],
+          "description": "User role in the system"
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string",
+          "format": "email"
+        },
+        "photoURL": {
+          "type": "string",
+          "format": "uri"
+        },
+        "points": {
+          "type": "number",
+          "description": "Gamification points for reporting issues"
+        }
+      },
+      "required": ["role", "displayName", "email"]
+    }
+  },
+  "firestore": {
+    "/issues/{issueId}": {
+      "schema": "Issue",
+      "description": "Collection of all civic issues"
+    },
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile collection"
+    }
+  }
+}

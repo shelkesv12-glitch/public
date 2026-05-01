@@ -1,0 +1,13 @@
+{
+  "name": "CityFix - AI Civic Intelligence",
+  "description": "An AI-powered civic issue management system for reporting, tracking, and resolving urban problems like potholes and garbage.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "AI-powered issue detection",
+    "Real-time tracking",
+    "Civic dashboard"
+  ]
+}

@@ -1,0 +1,94 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper Functions
+    function isSignedIn() { return request.auth != null; }
+    function isEmailVerified() { return request.auth.token.email_verified == true; }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    
+    // Admin check looks for email in environment or a role in the user document
+    function isAdmin() { 
+      return isSignedIn() && (
+        request.auth.token.email == 'shelkesv12@gmail.com' || 
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
+    }
+    
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    // User Profile Rules
+    match /users/{userId} {
+      function isValidUser(data) {
+        return data.keys().hasAll(['role', 'displayName', 'email']) &&
+               data.role in ['citizen', 'admin', 'staff'] &&
+               data.displayName is string && data.displayName.size() <= 100 &&
+               data.email is string && data.email.size() <= 100;
+      }
+
+      allow get: if isSignedIn();
+      allow list: if isAdmin();
+      
+      // Fixed: Allow admin bootstrap during first login
+      allow create: if isOwner(userId) && isValidUser(incoming()) && (
+        (request.auth.token.email == 'shelkesv12@gmail.com' && incoming().role == 'admin') ||
+        (incoming().role == 'citizen')
+      );
+      
+      allow update: if (isOwner(userId) || isAdmin()) && isValidUser(incoming()) && (
+        (isOwner(userId) && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL'])) ||
+        isAdmin()
+      );
+    }
+
+    // Issue Rules
+    match /issues/{issueId} {
+      function isValidIssue(data) {
+        return data.keys().hasAll(['title', 'description', 'category', 'severity', 'status', 'imageUrl', 'reporterId', 'createdAt', 'updatedAt']) &&
+               data.title is string && data.title.size() <= 500 &&
+               data.description is string && data.description.size() <= 5000 &&
+               data.category in ['pothole', 'garbage', 'water_leakage', 'drainage', 'other'] &&
+               data.severity in ['low', 'medium', 'high', 'critical'] &&
+               data.status in ['pending', 'in_progress', 'resolved', 'rejected'] &&
+               data.imageUrl is string && data.imageUrl.size() <= 1000000 &&
+               data.reporterId == request.auth.uid &&
+               data.createdAt == request.time &&
+               data.updatedAt == request.time;
+      }
+
+      function isValidUpdate(data) {
+        return data.updatedAt == request.time &&
+               data.createdAt == existing().createdAt &&
+               data.reporterId == existing().reporterId;
+      }
+
+      // Public tracking is a feature, so signed in users can list issues.
+      allow list: if isSignedIn();
+      allow get: if isSignedIn();
+      
+      allow create: if isSignedIn() && isEmailVerified() && isValidIssue(incoming()) && isValidId(issueId);
+      
+      allow update: if isSignedIn() && isValidUpdate(incoming()) && (
+        // Admins can update almost anything (within reason) to bypass terminal locks or fix data
+        isAdmin() ||
+        (
+          // Terminal state locking for non-admins
+          (existing().status != 'resolved' && existing().status != 'rejected') && (
+            // Owner Action: Basic edits while pending
+            (isOwner(existing().reporterId) && existing().status == 'pending' && 
+             incoming().diff(existing()).affectedKeys().hasOnly(['title', 'category', 'imageUrl', 'updatedAt']))
+          )
+        )
+      );
+
+      allow delete: if isAdmin();
+    }
+  }
+}
