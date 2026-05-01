@@ -35,13 +35,26 @@ export default function App() {
         setUser(firebaseUser);
         // Fetch or create profile
         const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+        
+        // Check if user is in 'admins' collection
+        const adminDoc = firebaseUser.email ? await getDoc(doc(db, 'admins', firebaseUser.email.toLowerCase().trim())) : null;
+        const isAuthPerson = !!adminDoc?.exists() || firebaseUser.email === 'shelkesv12@gmail.com';
+
         if (userDoc.exists()) {
-          setProfile(userDoc.data() as UserProfile);
+          const currentProfile = userDoc.data() as UserProfile;
+          // If they are in admins collection but role isn't admin, update it
+          if (isAuthPerson && currentProfile.role !== 'admin') {
+            const updatedProfile = { ...currentProfile, role: 'admin' as const };
+            await setDoc(doc(db, 'users', firebaseUser.uid), updatedProfile);
+            setProfile(updatedProfile);
+          } else {
+            setProfile(currentProfile);
+          }
         } else {
-          // Default to citizen
+          // Default to citizen unless they are an admin
           const newProfile: UserProfile = {
             uid: firebaseUser.uid,
-            role: firebaseUser.email === 'shelkesv12@gmail.com' ? 'admin' : 'citizen',
+            role: isAuthPerson ? 'admin' : 'citizen',
             displayName: firebaseUser.displayName || 'Anonymous Citizen',
             email: firebaseUser.email || '',
             photoURL: firebaseUser.photoURL || '',

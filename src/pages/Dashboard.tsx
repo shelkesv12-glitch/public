@@ -249,20 +249,36 @@ export default function Dashboard({ profile }: { profile: UserProfile | null }) 
                       </div>
 
                       <div>
-                        <label className="text-xs font-bold uppercase tracking-widest text-slate-400 block mb-2">Admin Response (Notes to Citizen)</label>
+                        <label className="text-xs font-bold uppercase tracking-widest text-slate-400 block mb-2">Authority Response (Public Note)</label>
                         <textarea
                           value={adminNoteInput}
                           onChange={(e) => setAdminNoteInput(e.target.value)}
-                          placeholder="Type a message or internal notes..."
+                          placeholder="Type your response to the citizen here. This will be visible on their report."
                           className="w-full h-32 p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-all"
                         />
-                        <button
-                          disabled={isUpdating || adminNoteInput === selectedIssue.adminNotes}
-                          onClick={() => handleUpdateIssue(selectedIssue.id!, { adminNotes: adminNoteInput })}
-                          className="mt-4 w-full bg-slate-900 text-white py-4 rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-xl shadow-slate-200 disabled:opacity-50"
-                        >
-                          {isUpdating ? 'Saving...' : 'Update Notes'}
-                        </button>
+                        <div className="flex gap-3 mt-4">
+                          <button
+                            disabled={isUpdating || adminNoteInput === selectedIssue.adminNotes}
+                            onClick={() => handleUpdateIssue(selectedIssue.id!, { adminNotes: adminNoteInput })}
+                            className="flex-1 bg-slate-900 text-white py-4 rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-xl shadow-slate-200 disabled:opacity-50"
+                          >
+                            {isUpdating ? 'Saving...' : 'Update Response'}
+                          </button>
+                          {selectedIssue.status !== 'resolved' && (
+                            <button
+                              disabled={isUpdating}
+                              onClick={async () => {
+                                await handleUpdateIssue(selectedIssue.id!, { 
+                                  status: 'resolved', 
+                                  adminNotes: adminNoteInput || 'Resolution confirmed by authority.' 
+                                });
+                              }}
+                              className="bg-emerald-600 text-white px-6 py-4 rounded-2xl font-bold hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-100 disabled:opacity-50"
+                            >
+                              Resolve Now
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
